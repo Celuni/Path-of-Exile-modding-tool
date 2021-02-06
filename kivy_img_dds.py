@@ -57,6 +57,9 @@ DDS Format
 import math
 from struct import pack, unpack, calcsize
 
+# Magic ("DDS ")
+DDS_MAGIC = 0x20534444
+
 # DDSURFACEDESC2 dwFlags
 DDSD_CAPS                  = 0x00000001
 DDSD_HEIGHT                = 0x00000002
@@ -69,7 +72,9 @@ DDSD_DEPTH                 = 0x00800000
 
 # DDPIXELFORMAT dwFlags
 DDPF_ALPHAPIXELS           = 0x00000001
+DDPF_ALPHA                 = 0x00000002
 DDPF_FOURCC                = 0x00000004
+DDPF_PALETTEINDEXED8       = 0x00000020
 DDPF_RGB                   = 0x00000040
 DDPF_LUMINANCE             = 0x00020000
 
@@ -88,6 +93,72 @@ DDSCAPS2_CUBEMAP_POSITIVEZ = 0x00004000
 DDSCAPS2_CUBEMAP_NEGATIVEZ = 0x00008000
 DDSCAPS2_VOLUME            = 0x00200000
 
+# dds.h
+
+DDS_FOURCC = DDPF_FOURCC
+DDS_RGB = DDPF_RGB
+DDS_RGBA = DDPF_RGB | DDPF_ALPHAPIXELS
+DDS_LUMINANCE = DDPF_LUMINANCE
+DDS_LUMINANCEA = DDPF_LUMINANCE | DDPF_ALPHAPIXELS
+DDS_ALPHA = DDPF_ALPHA
+DDS_PAL8 = DDPF_PALETTEINDEXED8
+
+DDS_HEADER_FLAGS_TEXTURE = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT
+DDS_HEADER_FLAGS_MIPMAP = DDSD_MIPMAPCOUNT
+DDS_HEADER_FLAGS_VOLUME = DDSD_DEPTH
+DDS_HEADER_FLAGS_PITCH = DDSD_PITCH
+DDS_HEADER_FLAGS_LINEARSIZE = DDSD_LINEARSIZE
+
+DDS_HEIGHT = DDSD_HEIGHT
+DDS_WIDTH = DDSD_WIDTH
+
+DDS_SURFACE_FLAGS_TEXTURE = DDSCAPS_TEXTURE
+DDS_SURFACE_FLAGS_MIPMAP = DDSCAPS_COMPLEX | DDSCAPS_MIPMAP
+DDS_SURFACE_FLAGS_CUBEMAP = DDSCAPS_COMPLEX
+
+DDS_CUBEMAP_POSITIVEX = DDSCAPS2_CUBEMAP | DDSCAPS2_CUBEMAP_POSITIVEX
+DDS_CUBEMAP_NEGATIVEX = DDSCAPS2_CUBEMAP | DDSCAPS2_CUBEMAP_NEGATIVEX
+DDS_CUBEMAP_POSITIVEY = DDSCAPS2_CUBEMAP | DDSCAPS2_CUBEMAP_POSITIVEY
+DDS_CUBEMAP_NEGATIVEY = DDSCAPS2_CUBEMAP | DDSCAPS2_CUBEMAP_NEGATIVEY
+DDS_CUBEMAP_POSITIVEZ = DDSCAPS2_CUBEMAP | DDSCAPS2_CUBEMAP_POSITIVEZ
+DDS_CUBEMAP_NEGATIVEZ = DDSCAPS2_CUBEMAP | DDSCAPS2_CUBEMAP_NEGATIVEZ
+
+# DXT1
+DXT1_FOURCC = 0x31545844
+
+# DXT3
+DXT3_FOURCC = 0x33545844
+
+# DXT5
+DXT5_FOURCC = 0x35545844
+
+# dxgiformat.h
+
+DXGI_FORMAT_BC1_TYPELESS = 77
+DXGI_FORMAT_BC1_UNORM = 78
+DXGI_FORMAT_BC1_UNORM_SRGB = 79
+DXGI_FORMAT_BC2_TYPELESS = 80
+DXGI_FORMAT_BC2_UNORM = 81
+DXGI_FORMAT_BC2_UNORM_SRGB = 82
+DXGI_FORMAT_BC3_TYPELESS = 83
+DXGI_FORMAT_BC3_UNORM = 84
+DXGI_FORMAT_BC3_UNORM_SRGB = 85
+DXGI_FORMAT_BC4_TYPELESS = 86
+DXGI_FORMAT_BC4_UNORM = 87
+DXGI_FORMAT_BC4_SNORM = 88
+DXGI_FORMAT_BC5_TYPELESS = 89
+DXGI_FORMAT_BC5_UNORM = 90
+DXGI_FORMAT_BC5_SNORM = 91
+DXGI_FORMAT_B5G6R5_UNORM = 92
+DXGI_FORMAT_B5G5R5A1_UNORM = 93
+DXGI_FORMAT_B8G8R8A8_UNORM = 94
+DXGI_FORMAT_B8G8R8X8_UNORM = 95
+DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM = 96
+DXGI_FORMAT_BC7_TYPELESS = 97
+DXGI_FORMAT_BC7_UNORM = 98
+DXGI_FORMAT_BC7_UNORM_SRGB = 99
+
+
 # Common FOURCC codes
 DDS_DXTN = 0x00545844
 DDS_DXT1 = 0x31545844
@@ -95,6 +166,7 @@ DDS_DXT2 = 0x32545844
 DDS_DXT3 = 0x33545844
 DDS_DXT4 = 0x34545844
 DDS_DXT5 = 0x35545844
+DDS_DX10 = 0x30315844
 ATI1 = 0x31495441
 ATI2 = 0x32495441
 RXGB = 0x42475852
@@ -269,11 +341,14 @@ class Colour565(object):
 
 class DDSFile(object):
     fields = (
-        ('size', 0), ('flags', 1), ('height', 2),
-        ('width', 3), ('pitchOrLinearSize', 4), ('depth', 5),
-        ('mipmapCount', 6), ('pf_size', 18), ('pf_flags', 19),
-        ('pf_fourcc', 20), ('pf_rgbBitCount', 21), ('pf_rBitMask', 22),
-        ('pf_gBitMask', 23), ('pf_bBitMask', 24), ('pf_aBitMask', 25),
+        ('size', 0), # header size
+        ('flags', 1), ('height', 2), ('width', 3),
+        ('pitchOrLinearSize', 4), ('depth', 5), ('mipmapCount', 6),
+        # 11 reserved : 7 <-> 17
+        ('pf_size', 18), ('pf_flags', 19), # pixel format
+        ('pf_fourcc', 20),
+        ('pf_rgbBitCount', 21),
+        ('pf_rBitMask', 22), ('pf_gBitMask', 23), ('pf_bBitMask', 24), ('pf_aBitMask', 25), # masks
         ('caps1', 26), ('caps2', 27))
 
     def __init__(self, data):
@@ -288,6 +363,7 @@ class DDSFile(object):
         self.colours=[]
         for field, index in DDSFile.fields:
             meta[field] = 0
+        self.mode = "RGBA"
         if data :
             self.load()
 
@@ -303,6 +379,8 @@ class DDSFile(object):
                 self.pixelformat = 'DXT4'
             elif self.meta.pf_fourcc == DDS_DXT5 :
                 self.pixelformat = 'DXT5'
+            elif self.meta.pf_fourcc == DDS_DX10 :
+                self.pixelformat = 'DX10'
             elif self.meta.pf_fourcc == ATI1 :
                 self.pixelformat = 'ATI1N'
             elif self.meta.pf_fourcc == ATI2 :
@@ -350,6 +428,8 @@ class DDSFile(object):
             blocksize *= 16
         elif self.pixelformat == 'DXT5' :
             blocksize *= 16
+        elif self.pixelformat == 'DX10' :
+            blocksize *= 16
         elif self.pixelformat == 'ATI1N' :
             blocksize *= 8
         elif self.pixelformat == 'THREEDC' :
@@ -388,6 +468,7 @@ class DDSFile(object):
         if self.data[:4] != b'DDS ':
             raise DDSException('Invalid magic header')
         position += 4
+        print("file is a DDS indeed")
 
         # read header
         fmt = 'I' * 31
@@ -462,11 +543,52 @@ class DDSFile(object):
         #        size = pitch * meta.height
         #    else:
         #        size = dxt_size(meta.width, meta.height, dxt)
+        
+        if meta.pf_flags & 0x40 :
+          print("DDPF_RGB - Texture contains uncompressed RGB data")
+          #masks = {mask: ["R", "G", "B", "A"][i] for i, mask in enumerate(masks)}
+          #rawmode = ""
+          #if bitcount == 32:
+          #    rawmode += masks[0xFF000000]
+          #rawmode += masks[0xFF0000] + masks[0xFF00] + masks[0xFF]
+          #self.tile = [("raw", (0, 0) + self.size, 0, (rawmode, 0, 1))]
+        else :
+          n = 0
+          if meta.pf_fourcc == DDS_DXT1 :
+            print("pixel_format DXT1")
+            n = 1
+          elif meta.pf_fourcc == DDS_DXT3 :
+            print("pixel_format DXT3")
+            n = 2
+          elif meta.pf_fourcc == DDS_DXT5 :
+            print("pixel_format DXT5")
+            n = 3
+          elif meta.pf_fourcc == DDS_DX10 :
+            print("pixel_format DX10")
+            position += 20
+            # ignoring flags which pertain to volume textures and cubemaps
+            dxgi_format, dimension = unpack("<II", self.data[position:position+8])
+            #position += 8
+            print("%d %d" % (dxgi_format, dimension))
+            if dxgi_format in (DXGI_FORMAT_BC7_TYPELESS, DXGI_FORMAT_BC7_UNORM) :
+              print("pixel_format BC7")
+              n = 7
+            elif dxgi_format == DXGI_FORMAT_BC7_UNORM_SRGB:
+              print("pixel_format BC7 gamma = 1/2.2")
+              gamma = 1 / 2.2
+              n = 7
+            else:
+              print("Unimplemented DXGI format %d" % (dxgi_format))
+            
+          print("%12d data start" % (position))
+          print("%dx%d %d mipmaps" % (meta.width, meta.height, meta.mipmapCount))
+          #tile = [("bcn", (0, 0) + size, position, (n))]
+        
         datal = len(self.data)
         w = meta.width
         h = meta.height
         i=0
-        while position<datal :
+        while position < datal :
             #if dxt in (0, 1, 2, 3) :
             #    size = align_value(block * w, 4) * h
             #else:
@@ -479,6 +601,7 @@ class DDSFile(object):
             self.imagelist[i]["height"]=h
             self.imagelist[i]["position"]=position
             self.imagelist[i]["size"]=size
+            #print("%2d : %4dx%4d" % (i, w, h))
             position += size
             if w == 1 and h == 1 :
                 break
@@ -486,14 +609,14 @@ class DDSFile(object):
             h = max(1, h // 2)
             i+=1
         self.count = len(self.imagelist)
-        if position!=datal :
+        if position != datal :
             raise DDSException("total size mismatch %4d != %4d" % (position, datal))
         #self._dxt = dxt
 
     def stripbiggermipmapthan(self, sizelimit):
         choice = -1
         for i in range(self.count) :
-            if self.imagelist[i]["width"]<=sizelimit and self.imagelist[i]["height"]<=sizelimit :
+            if self.imagelist[i]["width"] <= sizelimit and self.imagelist[i]["height"] <= sizelimit :
                 choice = i
                 break
         if choice == -1 :
@@ -501,7 +624,11 @@ class DDSFile(object):
         newwidth = (self.imagelist[choice]["width"]).to_bytes(4, byteorder='little', signed=True)
         newheight = (self.imagelist[choice]["height"]).to_bytes(4, byteorder='little', signed=True)
         newmipmapcount = (self.count - choice).to_bytes(4, byteorder='little', signed=True)
-        return self.data[:12] + newheight + newwidth + self.data[20:28] + newmipmapcount + self.data[32:128] + self.data[self.imagelist[choice]["position"]:]
+        if self.meta.pf_fourcc == DDS_DX10 :
+          print("strip DX10")
+          return self.data[:12] + newheight + newwidth + self.data[20:28] + newmipmapcount + self.data[32:148] + self.data[self.imagelist[choice]["position"]:]
+        else :
+          return self.data[:12] + newheight + newwidth + self.data[20:28] + newmipmapcount + self.data[32:128] + self.data[self.imagelist[choice]["position"]:]
 
     def stripratiomipmap(self, divideby):
         choice = -1
@@ -516,7 +643,10 @@ class DDSFile(object):
         newwidth = (self.imagelist[choice]["width"]).to_bytes(4, byteorder='little', signed=True)
         newheight = (self.imagelist[choice]["height"]).to_bytes(4, byteorder='little', signed=True)
         newmipmapcount = (self.count - choice).to_bytes(4, byteorder='little', signed=True)
-        return self.data[:12] + newheight + newwidth + self.data[20:28] + newmipmapcount + self.data[32:128] + self.data[self.imagelist[choice]["position"]:]
+        if self.meta.pf_fourcc == DDS_DX10 :
+          return self.data[:12] + newheight + newwidth + self.data[20:28] + newmipmapcount + self.data[32:148] + self.data[self.imagelist[choice]["position"]:]
+        else :
+          return self.data[:12] + newheight + newwidth + self.data[20:28] + newmipmapcount + self.data[32:128] + self.data[self.imagelist[choice]["position"]:]
 
     def decode(self, thisimage) :
         width = self.imagelist[thisimage]["width"]
